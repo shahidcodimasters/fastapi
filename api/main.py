@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # MongoDB Connection with timeout settings
+# Vercel Deployment Trigger - Force Redeploy
 MONGO_DB_URL = os.getenv("MONGO_DB_URL", "mongodb+srv://shahidcodimasters_db_user:OpKk3sWNVMFdKcLf@cluster0.ktkqngb.mongodb.net/?appName=Cluster0&retryWrites=true&w=majority")
 
 client = None
