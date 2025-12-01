@@ -11,20 +11,28 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # MongoDB Connection with timeout settings
-MONGO_DB_URL = os.getenv("MONGO_DB_URL", "mongodb+srv://shahidcodimasters_db_user:OpKk3sWNVMFdKcLf@cluster0.ktkqngb.mongodb.net/?appName=Cluster0&serverSelectionTimeoutMS=5000&connectTimeoutMS=10000")
+MONGO_DB_URL = os.getenv("MONGO_DB_URL", "mongodb+srv://shahidcodimasters_db_user:OpKk3sWNVMFdKcLf@cluster0.ktkqngb.mongodb.net/?appName=Cluster0&retryWrites=true&w=majority")
 
-try:
-    client = MongoClient(MONGO_DB_URL)
-    client.admin.command('ping')  # Test connection
-    db = client["fastapi_db"]
-    collection = db["users"]
-    mongo_connected = True
-except (ServerSelectionTimeoutError, ConnectionFailure) as e:
-    print(f"MongoDB Connection Error: {e}")
-    mongo_connected = False
-    client = None
-    db = None
-    collection = None
+client = None
+db = None
+collection = None
+mongo_connected = False
+
+def init_mongodb():
+    global client, db, collection, mongo_connected
+    try:
+        client = MongoClient(MONGO_DB_URL, serverSelectionTimeoutMS=5000)
+        client.admin.command('ping')  # Test connection
+        db = client["fastapi_db"]
+        collection = db["users"]
+        mongo_connected = True
+        print("✅ MongoDB Connected Successfully")
+    except Exception as e:
+        print(f"❌ MongoDB Connection Error: {e}")
+        mongo_connected = False
+
+# Initialize MongoDB connection
+init_mongodb()
 
 app = FastAPI()
 
@@ -59,7 +67,18 @@ class UserResponse(BaseModel):
 async def health_check():
     return {
         "message": "The health check is successful!",
-        "mongodb_connected": mongo_connected
+        "mongodb_connected": mongo_connected,
+        "status": "✅ All Systems Online" if mongo_connected else "⚠️ MongoDB not connected"
+    }
+
+@app.get("/health")
+async def detailed_health():
+    return {
+        "api": "online",
+        "mongodb_connected": mongo_connected,
+        "mongo_url_set": bool(os.getenv("MONGO_DB_URL")),
+        "database_name": "fastapi_db" if mongo_connected else "N/A",
+        "collection_name": "users" if mongo_connected else "N/A"
     }
 
 # Insert User API
