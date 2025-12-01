@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
+from pymongo.errors import ServerSelectionTimeoutError, ConnectionFailure
 from pydantic import BaseModel
 from typing import List, Optional
 from bson.objectid import ObjectId
@@ -9,11 +10,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# MongoDB Connection
-MONGO_DB_URL = os.getenv("MONGO_DB_URL", "mongodb+srv://shahidcodimasters_db_user:OpKk3sWNVMFdKcLf@cluster0.ktkqngb.mongodb.net/?appName=Cluster0")
-client = MongoClient(MONGO_DB_URL)
-db = client["fastapi_db"]
-collection = db["users"]
+# MongoDB Connection with timeout settings
+MONGO_DB_URL = os.getenv("MONGO_DB_URL", "mongodb+srv://shahidcodimasters_db_user:OpKk3sWNVMFdKcLf@cluster0.ktkqngb.mongodb.net/?appName=Cluster0&serverSelectionTimeoutMS=5000&connectTimeoutMS=10000")
+
+try:
+    client = MongoClient(MONGO_DB_URL)
+    client.admin.command('ping')  # Test connection
+    db = client["fastapi_db"]
+    collection = db["users"]
+    mongo_connected = True
+except (ServerSelectionTimeoutError, ConnectionFailure) as e:
+    print(f"MongoDB Connection Error: {e}")
+    mongo_connected = False
+    client = None
+    db = None
+    collection = None
 
 app = FastAPI()
 
@@ -46,11 +57,16 @@ class UserResponse(BaseModel):
 # Routes
 @app.get("/")
 async def health_check():
-    return {"message": "The health check is successful!"}
+    return {
+        "message": "The health check is successful!",
+        "mongodb_connected": mongo_connected
+    }
 
 # Insert User API
 @app.post("/users", response_model=UserResponse)
 async def create_user(user: User):
+    if not mongo_connected:
+        raise HTTPException(status_code=503, detail="Database connection not available")
     try:
         result = collection.insert_one(user.dict())
         user_id = str(result.inserted_id)
@@ -64,6 +80,8 @@ async def create_user(user: User):
 # Fetch All Users API
 @app.get("/users", response_model=List[UserResponse])
 async def get_all_users():
+    if not mongo_connected:
+        raise HTTPException(status_code=503, detail="Database connection not available")
     try:
         users = []
         for user in collection.find():
@@ -81,6 +99,8 @@ async def get_all_users():
 # Fetch User by ID API
 @app.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str):
+    if not mongo_connected:
+        raise HTTPException(status_code=503, detail="Database connection not available")
     try:
         user = collection.find_one({"_id": ObjectId(user_id)})
         if not user:
@@ -98,6 +118,8 @@ async def get_user(user_id: str):
 # Update User API
 @app.put("/users/{user_id}", response_model=UserResponse)
 async def update_user(user_id: str, user: User):
+    if not mongo_connected:
+        raise HTTPException(status_code=503, detail="Database connection not available")
     try:
         result = collection.update_one(
             {"_id": ObjectId(user_id)},
@@ -119,6 +141,8 @@ async def update_user(user_id: str, user: User):
 # Delete User API
 @app.delete("/users/{user_id}")
 async def delete_user(user_id: str):
+    if not mongo_connected:
+        raise HTTPException(status_code=503, detail="Database connection not available")
     try:
         result = collection.delete_one({"_id": ObjectId(user_id)})
         if result.deleted_count == 0:
