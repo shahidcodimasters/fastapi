@@ -10,5 +10,8 @@
             "src": "/(.*)",
             "dest": "api/main.py"
         }
-    ]
+    ],
+    "env": {
+        "MONGO_DB_URL": "@mongodb_connection_string"
+    }
 }
